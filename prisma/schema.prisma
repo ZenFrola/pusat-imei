@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  isReseller Boolean  @default(false)
+  isAdmin    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  orders     Order[]
+}
+
+model Service {
+  id            String  @id @default(cuid())
+  name          String
+  description   String
+  price         Int
+  resellerPrice Int
+  active        Boolean @default(true)
+  sortOrder     Int     @default(0)
+  orders        Order[]
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  guestToken      String?  @unique
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id])
+  imei            String
+  waNumber        String
+  price           Int
+  isResellerOrder Boolean  @default(false)
+  status          String   @default("MENUNGGU_PEMBAYARAN")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Setting {
+  id               String  @id @default("main")
+  telegramBotToken String?
+  telegramChatId   String?
+  qrisImage        String?
+  tgOffset         Int     @default(0)
+}
