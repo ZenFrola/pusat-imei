@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUser, hasApprovedResellerAccess } from "@/lib/auth";
 
 // GET /api/services — daftar jasa aktif (harga menyesuaikan status reseller)
 export async function GET() {
@@ -16,8 +16,8 @@ export async function GET() {
       description: s.description,
       price: s.price,
       resellerPrice: s.resellerPrice,
-      activePrice: user?.isReseller ? s.resellerPrice : s.price,
-      isReseller: !!user?.isReseller,
+      activePrice: user && hasApprovedResellerAccess(user) ? s.resellerPrice : s.price,
+      isReseller: !!user && hasApprovedResellerAccess(user),
     })),
   });
 }
