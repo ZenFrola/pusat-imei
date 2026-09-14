@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUser, hasApprovedResellerAccess } from "@/lib/auth";
 import { sendOrderToOwner } from "@/lib/telegram";
 import { cookies } from "next/headers";
 import { randomBytes, randomInt } from "crypto";
@@ -46,7 +46,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Layanan tidak ditemukan" }, { status: 404 });
   }
 
-  const price = user?.isReseller ? service.resellerPrice : service.price;
+  const isApprovedReseller = !!user && hasApprovedResellerAccess(user);
+  const price = isApprovedReseller ? service.resellerPrice : service.price;
 
   // pastikan kode unik
   let code = makeCode();
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
       imei,
       waNumber,
       price,
-      isResellerOrder: !!user?.isReseller,
+      isResellerOrder: isApprovedReseller,
       status: "MENUNGGU_PEMBAYARAN",
     },
   });

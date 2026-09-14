@@ -5,7 +5,10 @@ import { create } from "zustand";
 export type SessionUser = {
   id: string;
   email: string;
+  name?: string | null;
+  phone?: string | null;
   isReseller: boolean;
+  resellerStatus: string;
   isAdmin: boolean;
 };
 
@@ -14,7 +17,7 @@ type AuthState = {
   loading: boolean;
   fetchMe: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, asReseller: boolean) => Promise<void>;
+  register: (email: string, password: string, asReseller: boolean, name?: string, phone?: string, passwordConfirmation?: string) => Promise<{ paymentToken?: string }>;
   becomeReseller: () => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -44,15 +47,17 @@ export const useAuth = create<AuthState>((set) => ({
     set({ user: data.user });
   },
 
-  register: async (email, password, asReseller) => {
+  register: async (email, password, asReseller, name, phone, passwordConfirmation) => {
     const res = await fetch("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "register", email, password, asReseller }),
+      body: JSON.stringify({ action: "register", email, password, asReseller, name, phone, passwordConfirmation }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Registrasi gagal");
+    if (data.pending) return { paymentToken: data.paymentToken };
     set({ user: data.user });
+    return {};
   },
 
   becomeReseller: async () => {

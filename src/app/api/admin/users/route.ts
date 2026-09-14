@@ -17,7 +17,10 @@ export async function GET() {
     select: {
       id: true,
       email: true,
+      name: true,
+      phone: true,
       isReseller: true,
+      resellerStatus: true,
       isAdmin: true,
       createdAt: true,
       _count: { select: { orders: true } },
@@ -42,14 +45,17 @@ export async function PATCH(req: Request) {
   if (body.userId === admin.id && body.isAdmin === false) {
     return NextResponse.json({ error: "Tidak bisa mencabut admin diri sendiri" }, { status: 400 });
   }
-  const data: Record<string, boolean> = {};
-  if (body.isReseller !== undefined) data.isReseller = body.isReseller;
+  const data: { isReseller?: boolean; resellerStatus?: string; isAdmin?: boolean } = {};
+  if (body.isReseller !== undefined) {
+    data.isReseller = body.isReseller;
+    data.resellerStatus = body.isReseller ? "APPROVED" : "NONE";
+  }
   if (body.isAdmin !== undefined) data.isAdmin = body.isAdmin;
 
   const user = await db.user.update({
     where: { id: body.userId },
     data,
-    select: { id: true, email: true, isReseller: true, isAdmin: true },
+    select: { id: true, email: true, isReseller: true, resellerStatus: true, isAdmin: true },
   });
   return NextResponse.json({ user });
 }

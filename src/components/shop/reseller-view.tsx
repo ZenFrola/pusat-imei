@@ -22,17 +22,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth, formatRupiah } from "@/lib/store";
 import type { ServiceItem } from "./order-dialog";
 import { OrderDialog } from "./order-dialog";
-import { Users, TrendingDown, BadgeCheck, Loader2 } from "lucide-react";
+import { Users, TrendingDown, BadgeCheck } from "lucide-react";
 
 type Props = {
   onNeedAuth: (mode?: "login" | "register") => void;
 };
 
 export function ResellerView({ onNeedAuth }: Props) {
-  const { user, becomeReseller } = useAuth();
+  const { user } = useAuth();
   const [services, setServices] = useState<ServiceItem[] | null>(null);
   const [selected, setSelected] = useState<ServiceItem | null>(null);
-  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     fetch("/api/services")
@@ -40,15 +39,6 @@ export function ResellerView({ onNeedAuth }: Props) {
       .then((d) => setServices(d.services))
       .catch(() => setServices([]));
   }, [user]);
-
-  async function handleUpgrade() {
-    setUpgrading(true);
-    try {
-      await becomeReseller();
-    } finally {
-      setUpgrading(false);
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -100,25 +90,33 @@ export function ResellerView({ onNeedAuth }: Props) {
           ) : !user.isReseller ? (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                Akun Anda saat ini statusnya pembeli reguler. Aktifkan status reseller untuk
-                langsung menikmati harga khusus di seluruh layanan.
+                Akun Anda belum aktif sebagai reseller. Silakan daftar kembali dengan mencentang
+                &quot;Daftar sebagai Reseller&quot; agar owner dapat menyetujui pendaftaran.
               </p>
-              <Button
-                onClick={handleUpgrade}
-                disabled={upgrading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {upgrading ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
-                Aktifkan Status Reseller Saya
-              </Button>
+              {user.resellerStatus === "PENDING" && (
+                <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Pendaftaran reseller Anda masih menunggu persetujuan owner.
+                </p>
+              )}
             </div>
           ) : (
-            <div className="flex items-center gap-2 rounded-lg bg-white/70 p-3 text-sm">
-              <BadgeCheck className="h-5 w-5 text-emerald-600" />
-              <span>
-                Akun Anda <b>aktif sebagai reseller</b> — semua harga di bawah sudah menjadi harga
-                khusus Anda.
-              </span>
+            <div className="space-y-2">
+              {user.resellerStatus === "APPROVED" && (
+                <div className="rounded-lg border border-emerald-300 bg-emerald-100 p-3 text-sm text-emerald-900">
+                  <b>🎉 Status reseller Anda diterima!</b>
+                  <p className="mt-1">
+                    Owner sudah menyetujui pendaftaran Anda melalui Telegram. Sekarang Anda
+                    mendapatkan akses dan harga khusus reseller.
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center gap-2 rounded-lg bg-white/70 p-3 text-sm">
+                <BadgeCheck className="h-5 w-5 text-emerald-600" />
+                <span>
+                  Akun Anda <b>aktif sebagai reseller</b> — semua harga di bawah sudah menjadi harga
+                  khusus Anda.
+                </span>
+              </div>
             </div>
           )}
         </CardContent>

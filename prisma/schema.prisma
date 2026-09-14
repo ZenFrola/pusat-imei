@@ -8,14 +8,19 @@ datasource db {
 }
 
 model User {
-  id         String   @id @default(cuid())
-  email      String   @unique
-  password   String
-  isReseller Boolean  @default(false)
-  isAdmin    Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  orders     Order[]
+  id             String   @id @default(cuid())
+  email          String   @unique
+  password       String
+  name           String?
+  phone          String?
+  isReseller     Boolean  @default(false)
+  resellerStatus String   @default("NONE")
+  resellerPaymentStatus String @default("UNPAID")
+  resellerPaymentToken  String? @unique
+  isAdmin        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  orders         Order[]
 }
 
 model Service {

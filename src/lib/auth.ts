@@ -11,6 +11,20 @@ function getSessionSecret(): string {
 }
 export const SESSION_COOKIE = "jasaku_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 hari
+export const RESELLER_STATUS = {
+  NONE: "NONE",
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const;
+
+export function hasApprovedResellerAccess(user: { isReseller: boolean; resellerStatus: string }) {
+  // isReseller=true keeps existing approved reseller accounts working after migration.
+  return (
+    user.resellerStatus === RESELLER_STATUS.APPROVED ||
+    (user.isReseller && user.resellerStatus === RESELLER_STATUS.NONE)
+  );
+}
 
 // ---------- Password ----------
 export function hashPassword(password: string): string {
@@ -77,7 +91,10 @@ export async function getSessionUser() {
     select: {
       id: true,
       email: true,
+      name: true,
+      phone: true,
       isReseller: true,
+      resellerStatus: true,
       isAdmin: true,
       createdAt: true,
     },

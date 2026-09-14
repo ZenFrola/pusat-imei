@@ -386,7 +386,10 @@ export function AdminServices() {
 type AdminUser = {
   id: string;
   email: string;
+  name: string | null;
+  phone: string | null;
   isReseller: boolean;
+  resellerStatus: string;
   isAdmin: boolean;
   createdAt: string;
   _count: { orders: number };
@@ -423,8 +426,9 @@ export function AdminUsers() {
         <TableHeader>
           <TableRow className="bg-muted/50">
             <TableHead>Email</TableHead>
+            <TableHead>Nama / No. HP</TableHead>
             <TableHead>Total Order</TableHead>
-            <TableHead>Reseller</TableHead>
+            <TableHead>Status Reseller</TableHead>
             <TableHead>Admin</TableHead>
           </TableRow>
         </TableHeader>
@@ -432,7 +436,7 @@ export function AdminUsers() {
           {users === null &&
             Array.from({ length: 3 }).map((_, i) => (
               <TableRow key={i}>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={5}>
                   <Skeleton className="h-6 w-full" />
                 </TableCell>
               </TableRow>
@@ -440,9 +444,15 @@ export function AdminUsers() {
           {(users ?? []).map((u) => (
             <TableRow key={u.id}>
               <TableCell className="font-medium">{u.email}</TableCell>
+              <TableCell className="text-xs">{u.name || "-"}<br />{u.phone || "-"}</TableCell>
               <TableCell>{u._count.orders}</TableCell>
               <TableCell>
-                <Switch checked={u.isReseller} onCheckedChange={(v) => patch(u.id, { isReseller: v })} />
+                <div className="space-y-1">
+                  <Badge className={u.isReseller ? "bg-emerald-600 text-white" : u.resellerStatus === "PENDING" ? "bg-amber-500 text-white" : "bg-slate-500 text-white"}>
+                    {u.isReseller ? "Approved/Aktif" : u.resellerStatus === "PENDING" ? "Pending" : u.resellerStatus === "REJECTED" ? "Rejected" : "Customer"}
+                  </Badge>
+                  <Switch checked={u.isReseller} onCheckedChange={(v) => patch(u.id, { isReseller: v })} />
+                </div>
               </TableCell>
               <TableCell>
                 <Switch checked={u.isAdmin} onCheckedChange={(v) => patch(u.id, { isAdmin: v })} />

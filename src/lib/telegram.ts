@@ -22,6 +22,35 @@ async function tgApi(token: string, method: string, body: unknown) {
   return json;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] || char);
+}
+
+export async function sendResellerRegistrationToOwner(
+  token: string,
+  chatId: string,
+  user: { id: string; name: string | null; email: string; phone: string | null; createdAt: Date }
+) {
+  const text =
+    "🔔 <b>PENDAFTARAN RESELLER BARU</b>\n\n" +
+    `👤 Nama: ${escapeHtml(user.name || "-")}\n` +
+    `📧 Email: ${escapeHtml(user.email)}\n` +
+    `📱 No. HP/WhatsApp: ${escapeHtml(user.phone || "-")}\n` +
+    `🕐 Waktu Daftar: ${user.createdAt.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}\n\n` +
+    "Status: ⏳ MENUNGGU PERSETUJUAN";
+  return tgApi(token, "sendMessage", {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+    reply_markup: {
+      inline_keyboard: [[
+        { text: "✅ TERIMA RESELLER", callback_data: `reseller_approve_${user.id}` },
+        { text: "❌ TOLAK RESELLER", callback_data: `reseller_reject_${user.id}` },
+      ]],
+    },
+  });
+}
+
 /** Kirim notifikasi pesanan ke owner (chat id) dengan tombol inline */
 export async function sendOrderToOwner(
   token: string,
@@ -84,6 +113,62 @@ export async function processTelegramUpdate(update: {
 
   const setting = await db.setting.findUnique({ where: { id: "main" } });
   if (!setting?.telegramBotToken) return { handled: false, info: "Bot token belum diatur" };
+  if (!setting.telegramChatId || String(cb.message?.chat.id) !== String(setting.telegramChatId)) {
+    await tgApi(setting.telegramBotToken, "answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: "Aksi hanya dapat dilakukan oleh owner",
+      show_alert: true,
+    });
+    return { handled: false, info: "Callback bukan dari chat owner" };
+  }
+
+  const resellerMatch = cb.data.match(/^reseller_(approve|reject)_(.+)$/);
+  if (resellerMatch) {
+    const [, decision, userId] = resellerMatch;
+    const user = await db.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      await tgApi(setting.telegramBotToken, "answerCallbackQuery", {
+        callback_query_id: cb.id,
+        text: "Pendaftar tidak ditemukan",
+        show_alert: true,
+      });
+      return { handled: false, info: "Pendaftar tidak ditemukan" };
+    }
+    const approved = decision === "approve";
+    const updated = await db.user.updateMany({
+      where: { id: user.id, resellerStatus: "PENDING", resellerPaymentStatus: "CLAIMED", isReseller: false },
+      data: { resellerStatus: approved ? "APPROVED" : "REJECTED", isReseller: approved },
+    });
+    if (updated.count === 0) {
+      await tgApi(setting.telegramBotToken, "answerCallbackQuery", {
+        callback_query_id: cb.id,
+        text: "Pendaftaran sudah diproses",
+        show_alert: true,
+      });
+      return { handled: false, info: "Pendaftaran reseller sudah diproses" };
+    }
+    const statusText = approved ? "✅ <b>RESELLER DISETUJUI</b>" : "❌ <b>PENDAFTARAN RESELLER DITOLAK</b>";
+    const detail =
+      `${statusText}\n\n` +
+      `👤 Nama: ${escapeHtml(user.name || "-")}\n` +
+      `📧 Email: ${escapeHtml(user.email)}\n` +
+      `📱 No. HP: ${escapeHtml(user.phone || "-")}\n\n` +
+      `Status: ${approved ? "🟢 RESELLER AKTIF" : "🔴 DITOLAK"}`;
+    await tgApi(setting.telegramBotToken, "answerCallbackQuery", {
+      callback_query_id: cb.id,
+      text: approved ? "Reseller disetujui" : "Pendaftaran ditolak",
+    });
+    if (cb.message) {
+      await tgApi(setting.telegramBotToken, "editMessageText", {
+        chat_id: cb.message.chat.id,
+        message_id: cb.message.message_id,
+        text: detail,
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [] },
+      });
+    }
+    return { handled: true, info: `${user.email} -> ${approved ? "APPROVED" : "REJECTED"}` };
+  }
 
   const order = await db.order.findUnique({
     where: { id: orderId },
