@@ -54,6 +54,14 @@ const SERVICES = [
     resellerPrice: 15000,
     sortOrder: 5,
   },
+  {
+    name: "Cek CEIR",
+    description: "Pengecekan status IMEI pada CEIR oleh owner melalui sumber resmi.",
+    price: 50000,
+    resellerPrice: 40000,
+    sortOrder: 6,
+    serviceType: "CEIR_CHECK",
+  },
 ];
 
 async function main() {
@@ -99,6 +107,20 @@ async function main() {
     console.log(`${SERVICES.length} jasa dibuat`);
   } else {
     console.log(`Sudah ada ${count} jasa, lewati seed jasa`);
+  }
+  const ceirService = await db.service.findFirst({ where: { serviceType: "CEIR_CHECK" } });
+  if (!ceirService) {
+    await db.service.create({
+      data: {
+        name: "Cek CEIR",
+        description: "Pengecekan status IMEI pada CEIR oleh owner melalui sumber resmi.",
+        price: 50000,
+        resellerPrice: 40000,
+        sortOrder: 6,
+        serviceType: "CEIR_CHECK",
+      },
+    });
+    console.log("Jasa Cek CEIR dibuat");
   }
 
   // Setting awal

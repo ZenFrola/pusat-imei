@@ -23,6 +23,7 @@ import {
   Clock,
   ShieldCheck as ShieldIcon,
   Loader2,
+  MessageCircle,
 } from "lucide-react";
 
 type Tab = "home" | "jasa" | "reseller" | "orders" | "admin";
@@ -242,6 +243,25 @@ export default function Page() {
                 ))}
               </div>
             </section>
+
+            <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+              <h2 className="text-2xl font-bold text-amber-950">Syarat Proses IMEI</h2>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-950">
+                <li>Nomor Modem / BB tersedia.</li>
+                <li>Unit Sim lock wajib ada Rsim dan setting pribadi.</li>
+                <li>Wajib IMEI original, bukan IMEI suntik.</li>
+                <li>HP benar kasus blokir, bukan hardware, ex kemen, atau ex bypass.</li>
+              </ul>
+              <details className="mt-4 rounded-lg border border-amber-200 bg-white/60 p-3">
+                <summary className="cursor-pointer font-semibold text-amber-950">Ketentuan Garansi IMEI</summary>
+                <div className="mt-2 space-y-2 text-sm text-amber-950">
+                  <p><b>Repeat:</b> proses ulang gratis oleh server jika status done tetapi HP belum naik jaringan, dalam interval 24 jam.</p>
+                  <p><b>Claim:</b> garansi gratis jika signal tiba-tiba hilang selama masa garansi berlaku.</p>
+                  <p>Jika Repeat dan Claim sudah dilakukan namun tetap gagal, server mengembalikan dana tanpa potongan.</p>
+                  <p><b>Refund tidak berlaku untuk:</b> salah input IMEI, SIM lock/MCK, nomor modem null, hardware, double input, atau masa interval kedaluwarsa.</p>
+                </div>
+              </details>
+            </section>
           </div>
         )}
 
@@ -326,6 +346,18 @@ export default function Page() {
         initialMode={authMode}
         onSuccess={() => setTab("reseller")}
       />
+      {process.env.NEXT_PUBLIC_WHATSAPP_OWNER_NUMBER && (
+        <a
+          href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_OWNER_NUMBER.replace(/\D/g, "")}?text=Halo%20saya%20butuh%20bantuan%20Pusat%20IMEI`}
+          target="_blank"
+          rel="noreferrer"
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-green-600 px-4 py-3 font-semibold text-white shadow-lg transition hover:bg-green-700"
+          aria-label="Hubungi owner melalui WhatsApp"
+        >
+          <MessageCircle className="h-5 w-5" />
+          <span className="hidden sm:inline">Bantuan</span>
+        </a>
+      )}
     </div>
   );
 }

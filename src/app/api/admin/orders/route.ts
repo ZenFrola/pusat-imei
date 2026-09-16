@@ -9,17 +9,18 @@ async function requireAdmin() {
 }
 
 // GET /api/admin/orders — semua pesanan
-export async function GET() {
+export async function GET(req: Request) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Akses admin diperlukan" }, { status: 403 });
   }
+  const imei = new URL(req.url).searchParams.get("imei")?.trim() || "";
   const orders = await db.order.findMany({
+    where: imei ? { imei: { contains: imei } } : undefined,
     include: {
-      service: { select: { name: true } },
+      service: { select: { name: true, serviceType: true } },
       user: { select: { email: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 200,
   });
   return NextResponse.json({ orders });
 }

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { notifyOrderCompleted } from "@/lib/whatsapp";
 
 export const STATUS_LABEL: Record<string, string> = {
   MENUNGGU_PEMBAYARAN: "Menunggu Pembayaran",
@@ -65,6 +66,7 @@ export async function sendOrderToOwner(
     status: string;
     service: { name: string };
     user: { email: string } | null;
+    serviceType?: string;
   }
 ) {
   const text =
@@ -78,12 +80,12 @@ export async function sendOrderToOwner(
     `👤 Akun: ${order.user?.email ?? "Customer tanpa akun"}\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     `✅ Pembeli sudah klik <i>"Saya Sudah Bayar"</i> di Pusat IMEI (QRIS).\n\n` +
-    `Klik <b>YES</b> untuk set status <b>DIPROSES</b>.`;
+    `Klik <b>${order.serviceType === "CEIR_CHECK" ? "PROSES CEIR" : "YES"}</b> untuk melanjutkan.`;
 
   const keyboard = {
     inline_keyboard: [
       [
-        { text: "✅ YES (Diproses)", callback_data: `confirm_${order.id}` },
+        { text: order.serviceType === "CEIR_CHECK" ? "🔎 PROSES CEIR" : "✅ YES (Diproses)", callback_data: `${order.serviceType === "CEIR_CHECK" ? "ceir_process" : "confirm"}_${order.id}` },
         { text: "❌ NO (Batal)", callback_data: `cancel_${order.id}` },
       ],
     ],
@@ -104,15 +106,46 @@ export async function processTelegramUpdate(update: {
     data?: string;
     message?: { chat: { id: number }; message_id: number };
   };
+  message?: {
+    message_id: number;
+    chat: { id: number };
+    text?: string;
+    reply_to_message?: { message_id: number; text?: string };
+  };
 }): Promise<{ handled: boolean; info?: string }> {
   const cb = update.callback_query;
-  if (!cb?.data) return { handled: false };
-
-  const action = cb.data.split("_")[0];
-  const orderId = cb.data.slice(action.length + 1);
 
   const setting = await db.setting.findUnique({ where: { id: "main" } });
   if (!setting?.telegramBotToken) return { handled: false, info: "Bot token belum diatur" };
+  const message = update.message;
+  if (message?.text) {
+    if (String(message.chat.id) !== String(setting.telegramChatId)) return { handled: false, info: "Pesan bukan dari chat owner" };
+    const match = message.text.match(/^\/ceir(?:_result)?\s+(\S+)\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|\s*([\s\S]+)$/i);
+    if (!match) return { handled: false, info: "Format CEIR tidak dikenali" };
+    const [, code, status, operator, result] = match;
+    const order = await db.order.findUnique({ where: { code }, include: { service: true } });
+    if (!order || order.service.serviceType !== "CEIR_CHECK") return { handled: false, info: "Order CEIR tidak ditemukan" };
+    if (!["DIPROSES", "MENUNGGU_KONFIRMASI"].includes(order.status)) return { handled: false, info: "Order CEIR belum siap menerima hasil" };
+    const normalizedStatus = status.trim().toUpperCase();
+    if (!["TERDAFTAR", "TIDAK TERDAFTAR", "DIBLOKIR", "TIDAK DITEMUKAN"].includes(normalizedStatus)) {
+      return { handled: false, info: "Status CEIR tidak valid" };
+    }
+    await db.ceirResult.upsert({
+      where: { orderId: order.id },
+      create: { orderId: order.id, status: normalizedStatus, operator: operator.trim() || null, result: result.trim() },
+      update: { status: normalizedStatus, operator: operator.trim() || null, result: result.trim(), processedAt: new Date() },
+    });
+    await db.order.update({ where: { id: order.id }, data: { status: "SELESAI" } });
+    await notifyOrderCompleted({ ...order, status: "SELESAI" });
+    await tgApi(setting.telegramBotToken, "sendMessage", {
+      chat_id: message.chat.id,
+      text: `✅ Hasil CEIR ${order.code} tersimpan.\nStatus: ${normalizedStatus}`,
+    });
+    return { handled: true, info: `Hasil CEIR tersimpan: ${order.code}` };
+  }
+  if (!cb?.data) return { handled: false };
+  const action = cb.data.split("_")[0];
+  const orderId = cb.data.slice(action.length + 1);
   if (!setting.telegramChatId || String(cb.message?.chat.id) !== String(setting.telegramChatId)) {
     await tgApi(setting.telegramBotToken, "answerCallbackQuery", {
       callback_query_id: cb.id,
@@ -120,6 +153,33 @@ export async function processTelegramUpdate(update: {
       show_alert: true,
     });
     return { handled: false, info: "Callback bukan dari chat owner" };
+  }
+
+  if (cb.data.startsWith("ceir_process_")) {
+    const orderId = cb.data.slice("ceir_process_".length);
+    const order = await db.order.findUnique({ where: { id: orderId }, include: { service: true } });
+    if (!order || order.service.serviceType !== "CEIR_CHECK") {
+      await tgApi(setting.telegramBotToken, "answerCallbackQuery", { callback_query_id: cb.id, text: "Order CEIR tidak ditemukan", show_alert: true });
+      return { handled: false, info: "Order CEIR tidak ditemukan" };
+    }
+    const updated = await db.order.updateMany({ where: { id: order.id, status: "MENUNGGU_KONFIRMASI" }, data: { status: "DIPROSES" } });
+    if (updated.count === 0) {
+      await tgApi(setting.telegramBotToken, "answerCallbackQuery", { callback_query_id: cb.id, text: "Order sudah diproses", show_alert: true });
+      return { handled: false, info: "Order CEIR sudah diproses" };
+    }
+
+    if (conf.status === "SELESAI") {
+      await notifyOrderCompleted({ ...order, status: conf.status });
+    }
+    await tgApi(setting.telegramBotToken, "answerCallbackQuery", { callback_query_id: cb.id, text: "CEIR diproses" });
+    if (cb.message) await tgApi(setting.telegramBotToken, "editMessageText", {
+      chat_id: cb.message.chat.id,
+      message_id: cb.message.message_id,
+      text: `🔎 <b>CEIR SEDANG DIPROSES</b>\n\nOrder: <b>${order.code}</b>\nIMEI: <code>${order.imei}</code>\n\nKirim hasil dengan format:\n<code>/ceir_result ${order.code} | TERDAFTAR | Telkomsel | IMEI terdaftar</code>`,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [] },
+    });
+    return { handled: true, info: `${order.code} -> DIPROSES` };
   }
 
   const resellerMatch = cb.data.match(/^reseller_(approve|reject)_(.+)$/);
@@ -134,6 +194,7 @@ export async function processTelegramUpdate(update: {
       });
       return { handled: false, info: "Pendaftar tidak ditemukan" };
     }
+
     const approved = decision === "approve";
     const updated = await db.user.updateMany({
       where: { id: user.id, resellerStatus: "PENDING", resellerPaymentStatus: "CLAIMED", isReseller: false },

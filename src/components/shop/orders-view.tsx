@@ -23,6 +23,7 @@ type MyOrder = {
   waNumber: string;
   price: number;
   status: string;
+  ceirResult?: { status: string; operator: string | null; result: string; processedAt: string } | null;
   isResellerOrder: boolean;
   createdAt: string;
   service: { name: string };
@@ -156,6 +157,13 @@ export function OrdersView() {
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                 Pesanan selesai. Terima kasih telah order!
               </p>
+            )}
+            {o.ceirResult && (
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
+                <b>Hasil CEIR: {o.ceirResult.status}</b>
+                {o.ceirResult.operator && <p>Operator: {o.ceirResult.operator}</p>}
+                <p className="mt-1 whitespace-pre-wrap">{o.ceirResult.result}</p>
+              </div>
             )}
             {o.status === "DIBATALKAN" && (
               <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">

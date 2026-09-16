@@ -27,6 +27,7 @@ export async function POST(req: Request) {
     description?: string;
     price?: number;
     resellerPrice?: number;
+    serviceType?: string;
   };
   if (!body.name?.trim() || !body.description?.trim()) {
     return NextResponse.json({ error: "Nama dan deskripsi wajib diisi" }, { status: 400 });
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
       description: body.description.trim(),
       price: Math.round(body.price),
       resellerPrice: Math.round(body.resellerPrice),
+      serviceType: body.serviceType === "CEIR_CHECK" ? "CEIR_CHECK" : "UNBLOCK_IMEI",
       sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
     },
   });
@@ -62,6 +64,7 @@ export async function PATCH(req: Request) {
     price?: number;
     resellerPrice?: number;
     active?: boolean;
+    serviceType?: string;
   };
   if (!body.id) return NextResponse.json({ error: "id wajib" }, { status: 400 });
 
@@ -71,6 +74,7 @@ export async function PATCH(req: Request) {
   if (body.price !== undefined) data.price = Math.round(body.price);
   if (body.resellerPrice !== undefined) data.resellerPrice = Math.round(body.resellerPrice);
   if (body.active !== undefined) data.active = body.active;
+  if (body.serviceType !== undefined) data.serviceType = body.serviceType === "CEIR_CHECK" ? "CEIR_CHECK" : "UNBLOCK_IMEI";
 
   const service = await db.service.update({ where: { id: body.id }, data });
   return NextResponse.json({ service });

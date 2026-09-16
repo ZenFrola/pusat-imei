@@ -87,7 +87,7 @@ export async function getSessionUser() {
   const userId = verifySessionToken(token);
   if (!userId) return null;
   return db.user.findUnique({
-    where: { id: userId },
+    where: { id: userId, isActive: true },
     select: {
       id: true,
       email: true,
