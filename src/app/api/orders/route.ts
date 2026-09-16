@@ -19,7 +19,7 @@ export async function GET() {
 
   const orders = await db.order.findMany({
     where: user ? { userId: user.id } : { guestToken },
-    include: { service: { select: { name: true } } },
+    include: { service: { select: { name: true, serviceType: true } }, ceirResult: true },
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json({ orders });
@@ -117,7 +117,10 @@ export async function PATCH(req: Request) {
   let tgError: string | null = null;
   const setting = await db.setting.findUnique({ where: { id: "main" } });
   if (setting?.telegramBotToken && setting?.telegramChatId) {
-    const res = await sendOrderToOwner(setting.telegramBotToken, setting.telegramChatId, order);
+    const res = await sendOrderToOwner(setting.telegramBotToken, setting.telegramChatId, {
+      ...order,
+      serviceType: order.service.serviceType,
+    });
     tgSent = !!res.ok;
     if (!res.ok) tgError = res.description || "Gagal kirim ke Telegram";
   } else {

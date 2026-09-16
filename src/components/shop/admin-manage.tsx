@@ -36,6 +36,7 @@ import { Loader2, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 export function AdminOrders() {
   const [orders, setOrders] = useState<AdminOrder[] | null>(null);
   const [busyId, setBusyId] = useState("");
+  const [imeiSearch, setImeiSearch] = useState("");
 
   type AdminOrder = {
     id: string;
@@ -51,12 +52,13 @@ export function AdminOrders() {
   };
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/admin/orders");
+    const query = imeiSearch.trim() ? `?imei=${encodeURIComponent(imeiSearch.trim())}` : "";
+    const res = await fetch(`/api/admin/orders${query}`);
     if (res.ok) {
       const d = await res.json();
       setOrders(d.orders);
     }
-  }, []);
+  }, [imeiSearch]);
 
   useEffect(() => {
     load();
@@ -82,11 +84,12 @@ export function AdminOrders() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Klik YES di bot Telegram <b>atau</b> ubah status manual di sini.
+          Riwayat semua order tersimpan di sini. Klik YES di bot Telegram <b>atau</b> ubah status manual.
         </p>
-        <Button variant="outline" size="sm" onClick={load}>
-          <RefreshCw className="h-4 w-4" /> Muat
-        </Button>
+        <div className="flex gap-2">
+          <Input className="h-9 w-52" placeholder="Cari IMEI..." value={imeiSearch} onChange={(e) => setImeiSearch(e.target.value)} />
+          <Button variant="outline" size="sm" onClick={load}><RefreshCw className="h-4 w-4" /> Muat</Button>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <Table>
@@ -99,6 +102,7 @@ export function AdminOrders() {
               <TableHead>Harga</TableHead>
               <TableHead>Pembeli</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Tanggal</TableHead>
               <TableHead className="text-right">Ubah Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -106,7 +110,7 @@ export function AdminOrders() {
             {orders === null &&
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={9}>
                     <Skeleton className="h-6 w-full" />
                   </TableCell>
                 </TableRow>
@@ -134,6 +138,7 @@ export function AdminOrders() {
                 <TableCell>
                   <StatusBadge status={o.status} />
                 </TableCell>
+                <TableCell>{new Date(o.createdAt).toLocaleString("id-ID")}</TableCell>
                 <TableCell className="text-right">
                   {busyId === o.id ? (
                     <Loader2 className="ml-auto h-4 w-4 animate-spin" />
@@ -167,10 +172,17 @@ type AdminService = {
   description: string;
   price: number;
   resellerPrice: number;
+  serviceType: "UNBLOCK_IMEI" | "CEIR_CHECK";
   active: boolean;
 };
 
-const EMPTY_FORM = { name: "", description: "", price: "", resellerPrice: "" };
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  price: "",
+  resellerPrice: "",
+  serviceType: "UNBLOCK_IMEI" as "UNBLOCK_IMEI" | "CEIR_CHECK",
+};
 
 export function AdminServices() {
   const [services, setServices] = useState<AdminService[] | null>(null);
@@ -206,6 +218,7 @@ export function AdminServices() {
       description: s.description,
       price: String(s.price),
       resellerPrice: String(s.resellerPrice),
+      serviceType: s.serviceType,
     });
     setError("");
     setDialogOpen(true);
@@ -222,6 +235,7 @@ export function AdminServices() {
         description: form.description,
         price: Number(form.price),
         resellerPrice: Number(form.resellerPrice),
+        serviceType: form.serviceType,
       };
       const res = await fetch("/api/admin/services", {
         method: editing ? "PATCH" : "POST",
@@ -367,6 +381,16 @@ export function AdminServices() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="svc-type">Tipe Layanan</Label>
+              <Select value={form.serviceType} onValueChange={(v) => setForm({ ...form, serviceType: v as "UNBLOCK_IMEI" | "CEIR_CHECK" })}>
+                <SelectTrigger id="svc-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UNBLOCK_IMEI">Unblock IMEI</SelectItem>
+                  <SelectItem value="CEIR_CHECK">Cek CEIR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {error && (
               <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 border border-rose-200">
                 {error}
@@ -391,6 +415,7 @@ type AdminUser = {
   isReseller: boolean;
   resellerStatus: string;
   isAdmin: boolean;
+  isActive: boolean;
   createdAt: string;
   _count: { orders: number };
 };
@@ -412,11 +437,23 @@ export function AdminUsers() {
   }, [load]);
 
   async function patch(userId: string, data: Record<string, boolean>) {
-    await fetch("/api/admin/users", {
+    const res = await fetch("/api/admin/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, ...data }),
     });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "Gagal memperbarui user");
+    }
+    await load();
+  }
+
+  async function remove(user: AdminUser) {
+    if (!confirm(`Hapus user ${user.email}? Penghapusan hanya bisa dilakukan jika belum memiliki order.`)) return;
+    const res = await fetch(`/api/admin/users?id=${user.id}`, { method: "DELETE" });
+    const d = await res.json();
+    if (!res.ok) alert(d.error || "Gagal menghapus user");
     await load();
   }
 
@@ -430,13 +467,15 @@ export function AdminUsers() {
             <TableHead>Total Order</TableHead>
             <TableHead>Status Reseller</TableHead>
             <TableHead>Admin</TableHead>
+            <TableHead>Status Akun</TableHead>
+            <TableHead className="text-right">Aksi</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {users === null &&
             Array.from({ length: 3 }).map((_, i) => (
               <TableRow key={i}>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={7}>
                   <Skeleton className="h-6 w-full" />
                 </TableCell>
               </TableRow>
@@ -456,6 +495,17 @@ export function AdminUsers() {
               </TableCell>
               <TableCell>
                 <Switch checked={u.isAdmin} onCheckedChange={(v) => patch(u.id, { isAdmin: v })} />
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Switch checked={u.isActive} onCheckedChange={(v) => patch(u.id, { isActive: v })} />
+                  <span className="text-xs">{u.isActive ? "Aktif" : "Nonaktif"}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-right">
+                <Button size="icon" variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={() => remove(u)} aria-label="Hapus user">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </TableCell>
             </TableRow>
           ))}

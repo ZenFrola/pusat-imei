@@ -18,6 +18,7 @@ model User {
   resellerPaymentStatus String @default("UNPAID")
   resellerPaymentToken  String? @unique
   isAdmin        Boolean  @default(false)
+  isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   orders         Order[]
@@ -32,6 +33,7 @@ model Service {
   active        Boolean @default(true)
   sortOrder     Int     @default(0)
   orders        Order[]
+  serviceType   String  @default("UNBLOCK_IMEI")
 }
 
 model Order {
@@ -47,8 +49,23 @@ model Order {
   price           Int
   isResellerOrder Boolean  @default(false)
   status          String   @default("MENUNGGU_PEMBAYARAN")
+  whatsappNotifiedAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  ceirResult      CeirResult?
+}
+
+model CeirResult {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      String
+  operator    String?
+  result      String
+  processedAt DateTime @default(now())
+  processedBy String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Setting {

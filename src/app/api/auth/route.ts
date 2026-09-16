@@ -78,6 +78,9 @@ export async function POST(req: Request) {
       if (!user || !verifyPassword(password, user.password)) {
         return NextResponse.json({ error: "Email atau password salah" }, { status: 401 });
       }
+      if (!user.isActive) {
+        return NextResponse.json({ error: "Akun Anda dinonaktifkan. Silakan hubungi admin." }, { status: 403 });
+      }
       if (user.resellerStatus === RESELLER_STATUS.PENDING) {
         return NextResponse.json({ error: "Pendaftaran reseller Anda masih menunggu persetujuan owner." }, { status: 403 });
       }
